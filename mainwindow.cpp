@@ -7,7 +7,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     QSettings::setPath(QSettings::IniFormat, QSettings::SystemScope, ".");
-    settings = new QSettings("Settings.ini", QSettings::IniFormat);
+    settings = new QSettings("Tetron.ini", QSettings::IniFormat);
     modbus = new QModbusTcpClient(this);
     connect(modbus, &QModbusClient::errorOccurred, [this](QModbusDevice::Error) {
         statusBar()->showMessage(modbus->errorString(), 5000);
@@ -16,7 +16,8 @@ MainWindow::MainWindow(QWidget *parent)
         statusBar()->showMessage(tr("Could not create Modbus master."), 5000);
     }
     modbus->setConnectionParameter(QModbusDevice::NetworkAddressParameter, settings->value("MKON_IP", "192.168.1.99"));
-    this->ui->setCurrentSpinBox->setValue(settings->value("Iset", 0).toInt());
+    this->ui->setCurrentSpinBox->setValue(settings->value("Iset", 0.0).toFloat());
+    ui->setIplineEdit->setText(settings->value("MKON_IP", "192.168.1.99").toString());
     // some connect params.
     if (!modbus->connectDevice()) {
         statusBar()->showMessage(tr("Connect failed: ") + modbus->errorString(), 5000);
@@ -143,3 +144,44 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+
+void MainWindow::on_startButton_toggled(bool checked)
+{
+    if (checked){
+        writeRegister(1280, 65280);     // turn on remote mode
+        writeRegister(2567, (float)ui->setCurrentSpinBox->value()); // set current
+    }else{
+        writeRegister(2567, 0);
+        writeRegister(1280, 0);
+    }
+}
+
+
+void MainWindow::on_setCurrentSpinBox_valueChanged(double arg1)
+{
+    if (ui->startButton->isChecked()){
+        writeRegister(2567, (float)arg1);
+    }
+}
+
+void MainWindow::on_setIplineEdit_textChanged(const QString &arg1)
+{
+    modbus->disconnect();
+    modbus->setConnectionParameter(QModbusDevice::NetworkAddressParameter, arg1);
+    if (!modbus->connectDevice()) {
+        statusBar()->showMessage(tr("Connect failed: ") + modbus->errorString(), 5000);
+    }
+}
+
+void MainWindow::on_exitButton_clicked()
+{
+    settings->setValue("MKON_IP", ui->setIplineEdit->text());
+    settings->setValue("Iset", ui->setCurrentSpinBox->value());
+    writeRegister(2567, 0); // set current to zero
+    writeRegister(1280, 0); // turn off remote mode
+    QTimer::singleShot(1000, this, &MainWindow::timeToStop);
+}
+
+void MainWindow::timeToStop(){
+    QCoreApplication::exit();
+}

@@ -23,7 +23,7 @@ public:
 private:
     Ui::MainWindow *ui;
     QModbusTcpClient *modbus = nullptr;
-    QSettings *settings = nullptr;
+    QSettings *settings;
     QModbusDataUnit *voltageMB = nullptr;
     QModbusDataUnit *currentMB = nullptr;
     QTimer *readLoopTimer;
@@ -37,5 +37,10 @@ signals:
 private slots:
     void onReadReady(QModbusReply* reply, int registerId);
     void readLoop();
+    void on_startButton_toggled(bool checked);
+    void on_setCurrentSpinBox_valueChanged(double arg1);
+    void on_setIplineEdit_textChanged(const QString &arg1);
+    void on_exitButton_clicked();
+    void timeToStop();
 };
 #endif // MAINWINDOW_H
