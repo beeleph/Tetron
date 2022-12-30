@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include <QModbusTcpClient>
+#include <QModbusTcpServer>
 #include <QModbusDataUnit>
 #include <QDebug>
 #include <QSettings>
@@ -28,6 +29,7 @@ private:
     QModbusDataUnit *currentMB = nullptr;
     QTimer *readLoopTimer;
 
+    void writeRegister(int registerAddr, bool value);
     void writeRegister(int registerAddr, int value);
     void writeRegister(int registerAddr, float value);
 
