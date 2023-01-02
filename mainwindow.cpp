@@ -20,7 +20,7 @@ MainWindow::MainWindow(QWidget *parent)
     modbus->setTimeout(3000);
     //modbus->setNumberOfRetries(5);
     this->ui->setCurrentSpinBox->setValue(settings->value("Iset", 0.0).toFloat());
-    ui->setIplineEdit->setText(settings->value("MKON_IP", "192.168.1.99").toString());
+    //ui->setIplineEdit->setText(settings->value("MKON_IP", "192.168.1.99").toString());
     // some connect params.
     if (!modbus->connectDevice()) {
         statusBar()->showMessage(tr("Connect failed: ") + modbus->errorString(), 5000);
@@ -29,13 +29,27 @@ MainWindow::MainWindow(QWidget *parent)
     }
     voltageMB = new QModbusDataUnit(QModbusDataUnit::HoldingRegisters, 2816, 4);
     currentMB = new QModbusDataUnit(QModbusDataUnit::HoldingRegisters, 2818, 4);
+    inputVMB = new QModbusDataUnit(QModbusDataUnit::DiscreteInputs, 1296, 2);
+    outputMB = new QModbusDataUnit(QModbusDataUnit::DiscreteInputs, 1297, 2);
+    overheatMB = new QModbusDataUnit(QModbusDataUnit::DiscreteInputs, 1298, 2);
+
     connect(this, SIGNAL(readFinished(QModbusReply*, int)), this, SLOT(onReadReady(QModbusReply*, int)));
     readLoopTimer = new QTimer(this);
     connect(readLoopTimer, SIGNAL(timeout()), this, SLOT(readLoop()));
     readLoopTimer->start(3000);
+    onPal.setColor(QPalette::WindowText, QColor("#ef5350"));
+    offPal.setColor(QPalette::WindowText, QColor("#66bb6a"));
+    ui->overheatLabel->setPalette(onPal);
+    ui->inputVlabel->setPalette(onPal);
+    ui->outputVlabel->setPalette(onPal);
+    ui->connectionLabel->setPalette(onPal);
 }
 
 void MainWindow::readLoop(){
+    if (modbus->ConnectedState)
+        ui->connectionLabel->setPalette(onPal);
+    else
+        ui->connectionLabel->setPalette(offPal);
     if (auto *replyVoltage = modbus->sendReadRequest(*voltageMB, 1)) {
         if (!replyVoltage->isFinished())
             connect(replyVoltage, &QModbusReply::finished, this, [this, replyVoltage](){
@@ -56,23 +70,73 @@ void MainWindow::readLoop(){
     } else {
         statusBar()->showMessage(tr("Read error: ") + modbus->errorString(), 5000);
     }
+    if (auto *replyInputV = modbus->sendReadRequest(*inputVMB, 1)) {
+        if (!replyInputV->isFinished())
+            connect(replyInputV, &QModbusReply::finished, this, [this, replyInputV](){
+                emit readFinished(replyInputV, 2);
+            });
+        else
+            delete replyInputV; // broadcast replies return immediately
+    } else {
+        statusBar()->showMessage(tr("Read error: ") + modbus->errorString(), 5000);
+    }
+    if (auto *replyOutputV = modbus->sendReadRequest(*outputMB, 1)) {
+        if (!replyOutputV->isFinished())
+            connect(replyOutputV, &QModbusReply::finished, this, [this, replyOutputV](){
+                emit readFinished(replyOutputV, 3);
+            });
+        else
+            delete replyOutputV; // broadcast replies return immediately
+    } else {
+        statusBar()->showMessage(tr("Read error: ") + modbus->errorString(), 5000);
+    }
+    if (auto *replyOverheat = modbus->sendReadRequest(*overheatMB, 1)) {
+        if (!replyOverheat->isFinished())
+            connect(replyOverheat, &QModbusReply::finished, this, [this, replyOverheat](){
+                emit readFinished(replyOverheat, 4);
+            });
+        else
+            delete replyOverheat; // broadcast replies return immediately
+    } else {
+        statusBar()->showMessage(tr("Read error: ") + modbus->errorString(), 5000);
+    }
+    //ui->overheatLabel->setAutoFillBackground(true);
 }
 
 void MainWindow::onReadReady(QModbusReply* reply, int registerId){ // that's not right. there's four bytes.
     if (!reply)
         return;
-    if (reply->error() == QModbusDevice::NoError) {
+    if (reply->error() == QModbusDevice::NoError) {    
         const QModbusDataUnit unit = reply->result();
-        float tmp = 0;
-        unsigned short data[2];
-        data[0] = unit.value(0);
-        data[1] = unit.value(1);
-        memcpy(&tmp, data, 4);
-        if (registerId == 0){          // voltage register
-            this->ui->Vlcd->display(tmp);
-        }
-        else if (registerId == 1) {                       // current register
-            ui->Ilcd->display(tmp);
+        if (registerId == 2)
+            if (unit.value(0))
+                ui->inputVlabel->setPalette(onPal);
+            else
+                ui->inputVlabel->setPalette(offPal);
+        else
+        if (registerId == 3)
+            if (unit.value(0))
+                ui->outputVlabel->setPalette(onPal);
+            else
+                ui->outputVlabel->setPalette(offPal);
+        else
+        if (registerId == 4)
+            if (unit.value(0))
+                ui->overheatLabel->setPalette(onPal);
+            else
+                ui->overheatLabel->setPalette(offPal);
+        else{
+            float tmp = 0;
+            unsigned short data[2];
+            data[0] = unit.value(0);
+            data[1] = unit.value(1);
+            memcpy(&tmp, data, 4);
+            if (registerId == 0){          // voltage register
+                this->ui->Vlcd->display(tmp);
+            }
+            else if (registerId == 1) {                       // current register
+                ui->Ilcd->display(tmp);
+            }
         }
     } else if (reply->error() == QModbusDevice::ProtocolError) {
         statusBar()->showMessage(tr("Read response error: %1 (Mobus exception: 0x%2)").
@@ -87,7 +151,7 @@ void MainWindow::onReadReady(QModbusReply* reply, int registerId){ // that's not
 }
 
 void MainWindow::writeRegister(int registerAddr, bool value){
-    QModbusDataUnit *writeUnit = new QModbusDataUnit(QModbusDataUnit::DiscreteInputs, registerAddr, 1);
+    QModbusDataUnit *writeUnit = new QModbusDataUnit(QModbusDataUnit::DiscreteInputs, registerAddr, 1); //???? or two?
     writeUnit->setValue(0, value);
     QModbusReply *reply;
     reply = modbus->sendWriteRequest(*writeUnit, 1);
@@ -201,18 +265,18 @@ void MainWindow::on_setCurrentSpinBox_valueChanged(double arg1)
     }
 }
 
-void MainWindow::on_setIplineEdit_textChanged(const QString &arg1)
+/*void MainWindow::on_setIplineEdit_textChanged(const QString &arg1)
 {
     modbus->disconnect();
     modbus->setConnectionParameter(QModbusDevice::NetworkAddressParameter, arg1);
     if (!modbus->connectDevice()) {
         statusBar()->showMessage(tr("Connect failed: ") + modbus->errorString(), 5000);
     }
-}
+}*/
 
 void MainWindow::on_exitButton_clicked()
 {
-    settings->setValue("MKON_IP", ui->setIplineEdit->text());
+    //settings->setValue("MKON_IP", ui->setIplineEdit->text());
     settings->setValue("Iset", ui->setCurrentSpinBox->value());
     writeRegister(2567, (float)0); // set current to zero
     writeRegister(2560, 2); // confirm set current

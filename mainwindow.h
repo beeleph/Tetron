@@ -27,7 +27,11 @@ private:
     QSettings *settings;
     QModbusDataUnit *voltageMB = nullptr;
     QModbusDataUnit *currentMB = nullptr;
+    QModbusDataUnit *inputVMB = nullptr;
+    QModbusDataUnit *outputMB = nullptr;
+    QModbusDataUnit *overheatMB = nullptr;
     QTimer *readLoopTimer;
+    QPalette onPal, offPal;
 
     void writeRegister(int registerAddr, bool value);
     void writeRegister(int registerAddr, int value);
@@ -41,7 +45,7 @@ private slots:
     void readLoop();
     void on_startButton_toggled(bool checked);
     void on_setCurrentSpinBox_valueChanged(double arg1);
-    void on_setIplineEdit_textChanged(const QString &arg1);
+    //void on_setIplineEdit_textChanged(const QString &arg1);
     void on_exitButton_clicked();
     void timeToStop();
 };
