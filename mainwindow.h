@@ -9,6 +9,7 @@
 #include <QSettings>
 #include <QTimer>
 #include <QThread>
+#include <QModbusRtuSerialMaster>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -25,15 +26,17 @@ public:
 private:
     Ui::MainWindow *ui;
     QModbusTcpClient *modbus = nullptr;
+    //QModbusRtuSerialMaster *modbus = nullptr;
     QSettings *settings;
     QModbusDataUnit *voltageMB = nullptr;
     QModbusDataUnit *currentMB = nullptr;
     QModbusDataUnit *inputVMB = nullptr;
     QModbusDataUnit *outputMB = nullptr;
     QModbusDataUnit *overheatMB = nullptr;
-    QTimer *readLoopTimer;
+    QTimer *readLoopTimer, *loweringCurrentTimer;
     QPalette onPal, offPal;
     int modbusSlaveID = 0, msleep = 500;
+    double cur = 0.0;
 
 
 
@@ -51,5 +54,6 @@ private slots:
     void writeRegister(int registerAddr, bool value);
     void writeRegister(int registerAddr, int value);
     void writeRegister(int registerAddr, float value);
+    void loweringCurrent();
 };
 #endif // MAINWINDOW_H

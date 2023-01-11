@@ -9,6 +9,14 @@ MainWindow::MainWindow(QWidget *parent)
     QSettings::setPath(QSettings::IniFormat, QSettings::SystemScope, ".");
     settings = new QSettings("Tetron.ini", QSettings::IniFormat);
     modbus = new QModbusTcpClient();
+    /*modbus = new QModbusRtuSerialMaster();
+
+    modbus->setConnectionParameter(QModbusDevice::SerialPortNameParameter,"COM4");
+    modbus->setConnectionParameter(QModbusDevice::SerialParityParameter, 0);
+    modbus->setConnectionParameter(QModbusDevice::SerialBaudRateParameter,9600);
+    modbus->setConnectionParameter(QModbusDevice::SerialDataBitsParameter,8);
+    modbus->setConnectionParameter(QModbusDevice::SerialStopBitsParameter,1);*/
+
     modbusSlaveID = 5;
     connect(modbus, &QModbusClient::errorOccurred, [this](QModbusDevice::Error) {
         statusBar()->showMessage(modbus->errorString(), 5000);
@@ -35,8 +43,10 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(this, SIGNAL(readFinished(QModbusReply*, int)), this, SLOT(onReadReady(QModbusReply*, int)));
     readLoopTimer = new QTimer(this);
+    loweringCurrentTimer = new QTimer(this);
     connect(readLoopTimer, SIGNAL(timeout()), this, SLOT(readLoop()));
-    readLoopTimer->start(3000);
+    connect(loweringCurrentTimer, SIGNAL(timeout()), this, SLOT(loweringCurrent()));
+    readLoopTimer->start(1000);
     onPal.setColor(QPalette::WindowText, QColor("#ef5350"));
     offPal.setColor(QPalette::WindowText, QColor("#66bb6a"));
     ui->overheatLabel->setPalette(onPal);
@@ -181,7 +191,6 @@ void MainWindow::writeRegister(int registerAddr, bool value){
 }
 
 void MainWindow::writeRegister(int registerAddr, int value){
-    qDebug() << "we trying to sent INT";
     QModbusDataUnit *writeUnit = new QModbusDataUnit(QModbusDataUnit::HoldingRegisters, registerAddr, 2);
     writeUnit->setValue(0, value);
     QModbusReply *reply;
@@ -250,28 +259,32 @@ void MainWindow::on_startButton_toggled(bool checked)
     if (checked){
         //writeRegister(1280, true);     // turn on remote mode
         //ui->setCurrentSpinBox->setEnabled(false);
-        QThread::msleep(msleep);
-        writeRegister(2561, (float)15.7);
-        QThread::msleep(msleep);
+        //writeRegister(2560, 6); // turn ON current supply
+        //QThread::msleep(msleep);
+        //QThread::msleep(msleep);
         //writeRegister(2563, (float)250);
-        QThread::msleep(msleep);
+        //QThread::msleep(msleep);
         writeRegister(2565, (float)15); // set voltage
-        QThread::msleep(msleep);
         writeRegister(2560, 1); //confirm voltage
-        QThread::msleep(msleep);
+        //QThread::msleep(msleep);
         writeRegister(2567, (float)ui->setCurrentSpinBox->value()); // set current
-        QThread::msleep(msleep);
         writeRegister(2560, 2); // confirm set current
-        QThread::msleep(msleep);
+        //QThread::msleep(msleep);
         writeRegister(2560, 6); // turn ON current supply
+        writeRegister(2561, (float)15.7);
+        //QThread::msleep(msleep);
+        //QThread::msleep(msleep);
+        //QThread::msleep(msleep);
     }else{
         //ui->setCurrentSpinBox->setEnabled(true);
-        //writeRegister(2567, (float)0);
-        //QThread::msleep(msleep);
-        //writeRegister(2560, 2);
-        //QThread::msleep(2000);
-        writeRegister(2560, 7); //  turn off current supply
-        //QThread::msleep(msleep);
+        /*writeRegister(2567, (float)0);
+        writeRegister(2560, 2);
+        writeRegister(2561, (float)15.7);*/
+        emit on_setCurrentSpinBox_valueChanged(0);
+        //cur = ui->setCurrentSpinBox->value();
+        //loweringCurrentTimer->start(msleep);
+        QTimer::singleShot(msleep, this, &MainWindow::loweringCurrent);
+
         //writeRegister(1280, false); // turn off remote mode
     }
 }
@@ -279,10 +292,16 @@ void MainWindow::on_startButton_toggled(bool checked)
 
 void MainWindow::on_setCurrentSpinBox_valueChanged(double arg1)
 {
-    if (ui->startButton->isChecked()){
+    if (ui->startButton->isChecked() || loweringCurrentTimer->isActive()){
         writeRegister(2567, (float)arg1);
-        QThread::msleep(msleep);
         writeRegister(2560, 2); // confirm set current
+        writeRegister(2561, (float)15.7);
+        /*QThread::msleep(msleep);
+        writeRegister(2565, (float)15); // set voltage
+        writeRegister(2560, 1); //confirm voltage
+        QThread::msleep(msleep);
+        writeRegister(2561, (float)15.7);*/
+
     }
 }
 
@@ -304,6 +323,7 @@ void MainWindow::on_exitButton_clicked()
     //writeRegister(2560, 2); // confirm set current
     //QThread::msleep(msleep);
     writeRegister(2560, 7); // turn OFF current supply
+    writeRegister(2561, (float)15.7);
     //QThread::msleep(msleep);
     //writeRegister(1280, 0); // turn off remote mode
     QTimer::singleShot(1000, this, &MainWindow::timeToStop);
@@ -312,4 +332,21 @@ void MainWindow::on_exitButton_clicked()
 
 void MainWindow::timeToStop(){
     QCoreApplication::exit();
+}
+
+void MainWindow::loweringCurrent(){
+    writeRegister(2560, 7); //  turn off current supply
+    writeRegister(2561, (float)15.7);
+    /*return;
+    if (cur > 10){
+        cur -= 10;
+        on_setCurrentSpinBox_valueChanged(cur);
+        qDebug() << "sending -- " + QString::number(cur);
+    }
+    else{
+        loweringCurrentTimer->stop();
+        emit on_setCurrentSpinBox_valueChanged(0);
+        writeRegister(2560, 7); //  turn off current supply
+        writeRegister(2561, (float)15.7);
+    }*/
 }
