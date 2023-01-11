@@ -8,6 +8,7 @@
 #include <QDebug>
 #include <QSettings>
 #include <QTimer>
+#include <QThread>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -32,10 +33,9 @@ private:
     QModbusDataUnit *overheatMB = nullptr;
     QTimer *readLoopTimer;
     QPalette onPal, offPal;
+    int modbusSlaveID = 0, msleep = 500;
 
-    void writeRegister(int registerAddr, bool value);
-    void writeRegister(int registerAddr, int value);
-    void writeRegister(int registerAddr, float value);
+
 
 signals:
     void readFinished(QModbusReply* reply, int relayId);
@@ -48,5 +48,8 @@ private slots:
     //void on_setIplineEdit_textChanged(const QString &arg1);
     void on_exitButton_clicked();
     void timeToStop();
+    void writeRegister(int registerAddr, bool value);
+    void writeRegister(int registerAddr, int value);
+    void writeRegister(int registerAddr, float value);
 };
 #endif // MAINWINDOW_H
