@@ -26,6 +26,7 @@ public:
 private:
     Ui::MainWindow *ui;
     QModbusTcpClient *modbus = nullptr;
+    QModbusTcpClient *modbusMV210 = nullptr;
     //QModbusRtuSerialMaster *modbus = nullptr;
     QSettings *settings;
     QModbusDataUnit *voltageMB = nullptr;
@@ -33,9 +34,10 @@ private:
     QModbusDataUnit *inputVMB = nullptr;
     QModbusDataUnit *outputMB = nullptr;
     QModbusDataUnit *overheatMB = nullptr;
+    QModbusDataUnit *overheatMBQ1 = nullptr;
     QTimer *readLoopTimer, *loweringCurrentTimer;
     QPalette onPal, offPal;
-    int modbusSlaveID = 0, msleep = 500;
+    int modbusSlaveID = 0, msleep = 500, MV210InputReadedBit = 4;
     double cur = 0.0;
 
 

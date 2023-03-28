@@ -9,6 +9,7 @@ MainWindow::MainWindow(QWidget *parent)
     QSettings::setPath(QSettings::IniFormat, QSettings::SystemScope, ".");
     settings = new QSettings("Tetron.ini", QSettings::IniFormat);
     modbus = new QModbusTcpClient();
+    modbusMV210 = new QModbusTcpClient();
     /*modbus = new QModbusRtuSerialMaster();
 
     modbus->setConnectionParameter(QModbusDevice::SerialPortNameParameter,"COM4");
@@ -21,16 +22,27 @@ MainWindow::MainWindow(QWidget *parent)
     connect(modbus, &QModbusClient::errorOccurred, [this](QModbusDevice::Error) {
         statusBar()->showMessage(modbus->errorString(), 5000);
     });
-    if (!modbus) {
+    connect(modbusMV210, &QModbusClient::errorOccurred, [this](QModbusDevice::Error) {
+        statusBar()->showMessage(modbus->errorString(), 5000);
+    });
+    if (!modbus || !modbusMV210) {
         statusBar()->showMessage(tr("Could not create Modbus master."), 5000);
     }
     modbus->setConnectionParameter(QModbusDevice::NetworkAddressParameter, "192.168.1.99");//settings->value("MKON_IP", "192.168.1.99"));
     modbus->setConnectionParameter(QModbusDevice::NetworkPortParameter, "502");
     modbus->setTimeout(3000);
+    modbusMV210->setConnectionParameter(QModbusDevice::NetworkAddressParameter, "192.168.1.100");//settings->value("MKON_IP", "192.168.1.99"));
+    modbusMV210->setConnectionParameter(QModbusDevice::NetworkPortParameter, "502");
+    modbusMV210->setTimeout(3000);
     //modbus->setNumberOfRetries(5);
     //ui->setIplineEdit->setText(settings->value("MKON_IP", "192.168.1.99").toString());
     // some connect params.
     if (!modbus->connectDevice()) {
+        statusBar()->showMessage(tr("Connect failed: ") + modbus->errorString(), 5000);
+        qDebug() << modbus->connectionParameter(QModbusDevice::NetworkAddressParameter);
+        qDebug() << " modbus->connectDevice failed" + modbus->errorString();
+    }
+    if (!modbusMV210->connectDevice()) {
         statusBar()->showMessage(tr("Connect failed: ") + modbus->errorString(), 5000);
         qDebug() << modbus->connectionParameter(QModbusDevice::NetworkAddressParameter);
         qDebug() << " modbus->connectDevice failed" + modbus->errorString();
@@ -40,6 +52,7 @@ MainWindow::MainWindow(QWidget *parent)
     inputVMB = new QModbusDataUnit(QModbusDataUnit::Coils, 1296, 1);
     outputMB = new QModbusDataUnit(QModbusDataUnit::Coils, 1298, 1);
     overheatMB = new QModbusDataUnit(QModbusDataUnit::Coils, 1297, 1);
+    overheatMBQ1 = new QModbusDataUnit(QModbusDataUnit::HoldingRegisters, 51, 2);
 
     connect(this, SIGNAL(readFinished(QModbusReply*, int)), this, SLOT(onReadReady(QModbusReply*, int)));
     readLoopTimer = new QTimer(this);
@@ -53,6 +66,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->inputVlabel->setPalette(onPal);
     ui->outputVlabel->setPalette(onPal);
     ui->connectionLabel->setPalette(onPal);
+    ui->overheatLabelQ1->setPalette(onPal);
     ui->setCurrentSpinBox->setValue(settings->value("Iset", 0.0).toFloat());
 }
 
@@ -113,6 +127,16 @@ void MainWindow::readLoop(){
     } else {
         statusBar()->showMessage(tr("Read error: ") + modbus->errorString(), 5000);
     }
+    if (auto *replyOverheatQ1 = modbusMV210->sendReadRequest(*overheatMBQ1, 1)) {
+        if (!replyOverheatQ1->isFinished())
+            connect(replyOverheatQ1, &QModbusReply::finished, this, [this, replyOverheatQ1](){
+                emit readFinished(replyOverheatQ1, 5);
+            });
+        else
+            delete replyOverheatQ1; // broadcast replies return immediately
+    } else {
+        statusBar()->showMessage(tr("Read error: ") + modbus->errorString(), 5000);
+    }
     //ui->overheatLabel->setAutoFillBackground(true);
 }
 
@@ -138,6 +162,17 @@ void MainWindow::onReadReady(QModbusReply* reply, int registerId){ // that's not
                 ui->overheatLabel->setPalette(onPal);
             else
                 ui->overheatLabel->setPalette(offPal);
+        else
+        if (registerId == 5)
+            if ((MV210InputReadedBit & unit.value(0)) == MV210InputReadedBit)
+                ui->overheatLabelQ1->setPalette(offPal);
+        //заенейблить.
+            else{
+                ui->overheatLabelQ1->setPalette(onPal);
+                qDebug() << " ehm " + QString::number(unit.value(0));
+                //do something about it!
+                // если включен, то выключить. Задизейблить
+            }
         else{
             float tmp = 0;
             unsigned short data[2];
