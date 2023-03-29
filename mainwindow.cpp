@@ -68,12 +68,12 @@ MainWindow::MainWindow(QWidget *parent)
     ui->connectionLabel->setPalette(onPal);
     ui->overheatLabelQ1->setPalette(onPal);
     ui->setCurrentSpinBox->setValue(settings->value("Iset", 0.0).toFloat());
+    ui->startButton->setEnabled(false);
 }
 
 void MainWindow::readLoop(){
-    if (modbus->ConnectedState){
+    if (modbus->errorString().isEmpty()){
         ui->connectionLabel->setPalette(offPal);
-        //qDebug() << "Connected!";   // не работает так как задумано. нужно ошибку видимо в ручную проверять.
     }
     else
         ui->connectionLabel->setPalette(onPal);
@@ -164,14 +164,18 @@ void MainWindow::onReadReady(QModbusReply* reply, int registerId){ // that's not
                 ui->overheatLabel->setPalette(offPal);
         else
         if (registerId == 5)
-            if ((MV210InputReadedBit & unit.value(0)) == MV210InputReadedBit)
+            if ((MV210InputReadedBit & unit.value(0)) == MV210InputReadedBit){
                 ui->overheatLabelQ1->setPalette(offPal);
-        //заенейблить.
+                if (!ui->startButton->isEnabled())
+                    ui->startButton->setEnabled(true);
+            }
             else{
                 ui->overheatLabelQ1->setPalette(onPal);
                 qDebug() << " ehm " + QString::number(unit.value(0));
-                //do something about it!
-                // если включен, то выключить. Задизейблить
+                if (ui->startButton->isEnabled()){
+                    ui->startButton->setChecked(false); // check if working properly??
+                    ui->startButton->setEnabled(false);
+                }
             }
         else{
             float tmp = 0;
